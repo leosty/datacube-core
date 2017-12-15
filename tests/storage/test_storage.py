@@ -530,7 +530,6 @@ def test_multiband_support_in_datasetsource():
     defn = {
         "id": '12345678123456781234567812345678',
         "format": {"name": "hdf"},
-        'measurements': {'green': {'nodata': -999}},
         "image": {
             "bands": {
                 'green': {
