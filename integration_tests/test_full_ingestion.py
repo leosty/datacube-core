@@ -16,7 +16,7 @@ from datacube.api.query import query_group_by
 import datacube.scripts.cli_app
 from datacube.utils import geometry, read_documents, netcdf_extract_string
 
-from .conftest import GEOTIFF
+from .conftest import SAMPLE_GEOTIFF_STRUCTURE
 
 PROJECT_ROOT = Path(__file__).parents[1]
 CONFIG_SAMPLES = PROJECT_ROOT / 'docs/config_samples/'
@@ -50,8 +50,6 @@ def test_full_ingestion(global_integration_cli_args, index, driver,
         opts.extend(
             [
                 '-v',
-                '--driver',
-                driver.name,
                 'dataset',
                 'add',
                 '--auto-match',
@@ -76,8 +74,6 @@ def test_full_ingestion(global_integration_cli_args, index, driver,
     opts.extend(
         [
             '-v',
-            '--driver',
-            driver.name,
             'ingest',
             '--config-file',
             str(config_path)
@@ -210,16 +206,17 @@ def check_data_with_api(index, time_slices):
     dc = Datacube(index=index)
 
     # Make the retrieved data 100 less granular
-    shape_x = int(GEOTIFF['shape']['x'] / 100.0)
-    shape_y = int(GEOTIFF['shape']['y'] / 100.0)
-    pixel_x = int(GEOTIFF['pixel_size']['x'] * 100)
-    pixel_y = int(GEOTIFF['pixel_size']['y'] * 100)
+    shape_x = int(SAMPLE_GEOTIFF_STRUCTURE['shape']['x'] / 100.0)
+    shape_y = int(SAMPLE_GEOTIFF_STRUCTURE['shape']['y'] / 100.0)
+    pixel_x = int(SAMPLE_GEOTIFF_STRUCTURE['pixel_size']['x'] * 100)
+    pixel_y = int(SAMPLE_GEOTIFF_STRUCTURE['pixel_size']['y'] * 100)
 
     input_type_name = 'ls5_nbar_albers'
     input_type = dc.index.products.get_by_name(input_type_name)
     geobox = geometry.GeoBox(shape_x + 1, shape_y + 1,
-                             Affine(pixel_x, 0.0, GEOTIFF['ul']['x'], 0.0, pixel_y, GEOTIFF['ul']['y']),
-                             geometry.CRS(GEOTIFF['crs']))
+                             Affine(pixel_x, 0.0, SAMPLE_GEOTIFF_STRUCTURE['ul']['x'],
+                                    0.0, pixel_y, SAMPLE_GEOTIFF_STRUCTURE['ul']['y']),
+                             geometry.CRS(SAMPLE_GEOTIFF_STRUCTURE['crs']))
     observations = dc.find_datasets(product='ls5_nbar_albers', geopolygon=geobox.extent)
     group_by = query_group_by('time')
     sources = dc.group_datasets(observations, group_by)

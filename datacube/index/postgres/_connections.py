@@ -22,7 +22,8 @@ import datacube
 from datacube.compat import string_types
 from datacube.config import LocalConfig
 from datacube.utils import jsonify_document
-from . import tables, _api
+from . import _api
+from . import _core
 
 _LIB_ID = 'agdc-' + str(datacube.__version__)
 
@@ -96,12 +97,12 @@ class PostgresDb(object):
             application_name=application_name,
             pool_timeout=pool_timeout)
         if validate:
-            if not tables.database_exists(engine):
+            if not _core.database_exists(engine):
                 raise IndexSetupError('\n\nNo DB schema exists. Have you run init?\n\t{init_command}'.format(
                     init_command='datacube system init'
                 ))
 
-            if not tables.schema_is_latest(engine):
+            if not _core.schema_is_latest(engine):
                 raise IndexSetupError(
                     '\n\nDB schema is out of date. '
                     'An administrator must run init:\n\t{init_command}'.format(
@@ -172,9 +173,9 @@ class PostgresDb(object):
 
         :return: If it was newly created.
         """
-        is_new = tables.ensure_db(self._engine, with_permissions=with_permissions)
+        is_new = _core.ensure_db(self._engine, with_permissions=with_permissions)
         if not is_new:
-            tables.update_schema(self._engine)
+            _core.update_schema(self._engine)
 
         return is_new
 

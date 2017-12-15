@@ -10,7 +10,6 @@ import logging
 import os
 import shutil
 from datetime import datetime, timedelta
-from contextlib import contextmanager
 from pathlib import Path
 from copy import copy, deepcopy
 from uuid import UUID, uuid4
@@ -21,7 +20,8 @@ import rasterio
 import yaml
 
 import datacube.utils
-from datacube.index.postgres import _dynamic
+from datacube.index.postgres import _dynamic, _core
+from integration_tests.utils import alter_log_level
 
 try:
     from yaml import CSafeLoader as SafeLoader
@@ -32,7 +32,6 @@ from datacube.api import API
 from datacube.config import LocalConfig
 from datacube.index._api import Index, _DEFAULT_METADATA_TYPES_PATH
 from datacube.index.postgres import PostgresDb
-from datacube.index.postgres.tables import _core
 
 Driver = namedtuple('Driver', ['name', 'uri_scheme', 'as_uri'])
 
@@ -49,7 +48,7 @@ testdata: {test_tile_folder}
 eotiles: {eotiles_tile_folder}
 """
 
-GEOTIFF = {
+SAMPLE_GEOTIFF_STRUCTURE = {
     'date': datetime(1990, 3, 2),
     'shape': {
         'x': 432,
@@ -65,10 +64,10 @@ GEOTIFF = {
         'y': 6276000.0  # Coords must match crs
     }
 }
+INTEGRATION_TESTS_DIR = Path(__file__).parent
+INTEGRATION_DEFAULT_CONFIG_PATH = INTEGRATION_TESTS_DIR.joinpath('agdcintegration.conf')
 
-INTEGRATION_DEFAULT_CONFIG_PATH = Path(__file__).parent.joinpath('agdcintegration.conf')
-
-_EXAMPLE_LS5_NBAR_DATASET_FILE = Path(__file__).parent.joinpath('example-ls5-nbar.yaml')
+_EXAMPLE_LS5_NBAR_DATASET_FILE = INTEGRATION_TESTS_DIR.joinpath('example-ls5-nbar.yaml')
 _TIME_SLICES = 3
 '''Number of time slices to create in the sample data.'''
 
@@ -135,37 +134,35 @@ def local_config(integration_config_paths):
 
 
 @pytest.fixture(params=["US/Pacific", "UTC", ])
-def db(local_config, request):
+def postgres_db(local_config, request):
+    """
+    Return a connection to an PostgreSQL database, initialised with the default schema
+    and tables.
+    """
     timezone = request.param
 
-    db = PostgresDb.from_config(local_config, application_name='test-run', validate_connection=False)
-
-    # Drop and recreate tables so our tests have a clean db.
-    with db.connect() as connection:
-        _core.drop_db(connection._connection)
-    remove_dynamic_indexes()
-
     # Disable informational messages since we're doing this on every test run.
-    with _increase_logging(_core._LOG) as _:
+    with alter_log_level(_core._LOG):
+        db = PostgresDb.from_config(local_config,
+                                    application_name='test-run',
+                                    validate_connection=False)
+
+        # Drop the schema
+        with db.connect() as connection:
+            _core.drop_db(connection._connection)
+        remove_dynamic_indexes()
+
+        # Recreate tables so our tests have a clean db.
         _core.ensure_db(db._engine)
 
-    c = db._engine.connect()
-    c.execute('alter database %s set timezone = %r' % (local_config.db_database, str(timezone)))
-    c.close()
+        with db.connect() as c:
+            c.execute('alter database %s set timezone = %r' % (local_config.db_database, str(timezone)))
 
-    # We don't need informational create/drop messages for every config change.
-    _dynamic._LOG.setLevel(logging.WARN)
+        # We don't need informational create/drop messages for every config change.
+        _dynamic._LOG.setLevel(logging.WARN)
 
-    yield db
-    db.close()
-
-
-@contextmanager
-def _increase_logging(log, level=logging.WARN):
-    previous_level = log.getEffectiveLevel()
-    log.setLevel(level)
-    yield
-    log.setLevel(previous_level)
+        yield db
+        db.close()
 
 
 def remove_dynamic_indexes():
@@ -189,8 +186,8 @@ def driver(request):
 
 
 @pytest.fixture
-def index(db):
-    return Index(db)
+def index(postgres_db):
+    return Index(postgres_db)
 
 
 @pytest.fixture
@@ -253,8 +250,9 @@ def geotiffs(tmpdir_factory):
 
     config = load_yaml_file(_EXAMPLE_LS5_NBAR_DATASET_FILE)[0]
     # Customise the spatial coordinates
-    ul = GEOTIFF['ul']
-    lr = {dim: ul[dim] + GEOTIFF['shape'][dim] * GEOTIFF['pixel_size'][dim] for dim in ('x', 'y')}
+    ul = SAMPLE_GEOTIFF_STRUCTURE['ul']
+    lr = {dim: ul[dim] + SAMPLE_GEOTIFF_STRUCTURE['shape'][dim] * SAMPLE_GEOTIFF_STRUCTURE['pixel_size'][dim]
+          for dim in ('x', 'y')}
     config['grid_spatial']['projection']['geo_ref_points'] = {
         'ul': ul,
         'ur': {
@@ -302,9 +300,9 @@ def _make_tiffs_and_yamls(tiffs_dir, config, day_offset):
     bands = config['image']['bands']
     for band in bands.keys():
         # Copy dict to avoid aliases in yaml output (for better legibility)
-        bands[band]['shape'] = copy(GEOTIFF['shape'])
+        bands[band]['shape'] = copy(SAMPLE_GEOTIFF_STRUCTURE['shape'])
         bands[band]['cell_size'] = {
-            dim: abs(GEOTIFF['pixel_size'][dim]) for dim in ('x', 'y')}
+            dim: abs(SAMPLE_GEOTIFF_STRUCTURE['pixel_size'][dim]) for dim in ('x', 'y')}
         bands[band]['path'] = bands[band]['path'].replace('product/', '').replace(day_orig, day)
 
     dest_path = str(tiffs_dir.join('agdc-metadata_%s.yaml' % day))
@@ -322,26 +320,28 @@ def _make_geotiffs(tiffs_dir, day_offset):
     """Generate custom geotiff files, one per band."""
     tiffs = {}
     metadata = {'count': 1,
-                'crs': GEOTIFF['crs'],
+                'crs': SAMPLE_GEOTIFF_STRUCTURE['crs'],
                 'driver': 'GTiff',
                 'dtype': 'int16',
-                'width': GEOTIFF['shape']['x'],
-                'height': GEOTIFF['shape']['y'],
+                'width': SAMPLE_GEOTIFF_STRUCTURE['shape']['x'],
+                'height': SAMPLE_GEOTIFF_STRUCTURE['shape']['y'],
                 'nodata': -999.0,
-                'transform': [GEOTIFF['pixel_size']['x'],
+                'transform': [SAMPLE_GEOTIFF_STRUCTURE['pixel_size']['x'],
                               0.0,
-                              GEOTIFF['ul']['x'],
+                              SAMPLE_GEOTIFF_STRUCTURE['ul']['x'],
                               0.0,
-                              GEOTIFF['pixel_size']['y'],
-                              GEOTIFF['ul']['y']]}
+                              SAMPLE_GEOTIFF_STRUCTURE['pixel_size']['y'],
+                              SAMPLE_GEOTIFF_STRUCTURE['ul']['y']]}
 
     for band in range(_BANDS):
         path = str(tiffs_dir.join('band%02d_time%02d.tif' % ((band + 1), day_offset)))
         with rasterio.open(path, 'w', **metadata) as dst:
             # Write data in "corners" (rounded down by 100, for a size of 100x100)
-            data = np.zeros((GEOTIFF['shape']['y'], GEOTIFF['shape']['x']), dtype=np.int16)
-            data[:] = np.arange(GEOTIFF['shape']['y'] * GEOTIFF['shape']['x']) \
-                        .reshape((GEOTIFF['shape']['y'], GEOTIFF['shape']['x'])) + 10 * band + day_offset
+            data = np.zeros((SAMPLE_GEOTIFF_STRUCTURE['shape']['y'], SAMPLE_GEOTIFF_STRUCTURE['shape']['x']),
+                            dtype=np.int16)
+            data[:] = np.arange(SAMPLE_GEOTIFF_STRUCTURE['shape']['y'] * SAMPLE_GEOTIFF_STRUCTURE['shape']['x']) \
+                        .reshape((SAMPLE_GEOTIFF_STRUCTURE['shape']['y'], SAMPLE_GEOTIFF_STRUCTURE['shape']['x'])
+                                 ) + 10 * band + day_offset
             '''
             lr = (100 * int(GEOTIFF['shape']['y'] / 100.0),
                   100 * int(GEOTIFF['shape']['x'] / 100.0))
@@ -496,8 +496,8 @@ def example_ls5_nbar_metadata_doc():
 
 
 def load_test_dataset_types(filename, metadata_type=None):
-    types = load_yaml_file(filename)
-    return [alter_dataset_type_for_testing(type_, metadata_type=metadata_type) for type_ in types]
+    dataset_types = load_yaml_file(filename)
+    return [alter_dataset_type_for_testing(dataset_type, metadata_type=metadata_type) for dataset_type in dataset_types]
 
 
 def load_yaml_file(filename):
@@ -505,16 +505,16 @@ def load_yaml_file(filename):
         return list(yaml.load_all(f, Loader=SafeLoader))
 
 
-def alter_dataset_type_for_testing(type_, metadata_type=None):
-    if 'measurements' in type_:
-        type_ = limit_num_measurements(type_)
-    if 'storage' in type_:
-        type_ = shrink_storage_type(type_,
-                                    GEOGRAPHIC_VARS if is_geogaphic(type_) else PROJECTED_VARS,
-                                    TEST_STORAGE_SHRINK_FACTORS)
+def alter_dataset_type_for_testing(dataset_type, metadata_type=None):
+    if 'measurements' in dataset_type:
+        dataset_type = limit_num_measurements(dataset_type)
+    if 'storage' in dataset_type:
+        dataset_type = shrink_storage_type(dataset_type,
+                                           GEOGRAPHIC_VARS if is_geogaphic(dataset_type) else PROJECTED_VARS,
+                                           TEST_STORAGE_SHRINK_FACTORS)
     if metadata_type:
-        type_['metadata_type'] = metadata_type.name
-    return type_
+        dataset_type['metadata_type'] = metadata_type.name
+    return dataset_type
 
 
 def limit_num_measurements(storage_type):

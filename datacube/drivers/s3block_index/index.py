@@ -5,18 +5,14 @@ import logging
 from uuid import uuid4
 
 import numpy as np
-from sqlalchemy import MetaData
 from sqlalchemy import select, and_
 
 import datacube.index._datasets as base_dataset
 from datacube.index._api import Index
-from datacube.drivers.s3block_index._schema import S3_DATASET, S3_DATASET_CHUNK, S3_DATASET_MAPPING
-from datacube.index.postgres.tables import _pg_exists
-from datacube.index.postgres.tables._core import SQL_NAMING_CONVENTIONS, SCHEMA_NAME
+from datacube.drivers.s3block_index.schema import S3_DATASET, S3_DATASET_CHUNK, S3_DATASET_MAPPING, S3_METADATA
+from datacube.index.postgres._sql import _pg_exists
 
 _LOG = logging.getLogger(__name__)
-
-S3_METADATA = MetaData(naming_convention=SQL_NAMING_CONVENTIONS, schema=SCHEMA_NAME)
 
 
 class S3DatabaseException(Exception):
@@ -31,8 +27,8 @@ class S3BlockIndex(Index):
     def __init__(self, index=None, uri_scheme='s3+block', *args, **kargs):
         """Initialise the index and its dataset resource."""
         super(S3BlockIndex, self).__init__(index, *args, **kargs)
-        if not self.connected_to_s3_database():
-            raise S3DatabaseException('Not connected to an S3 Database')
+        # if not self.connected_to_s3_database():
+        #     raise S3DatabaseException('Not connected to an S3 Database')
         self.datasets = DatasetResource(self._db, self.products, uri_scheme)
 
     def connected_to_s3_database(self):

@@ -20,7 +20,7 @@ from sqlalchemy.sql import ColumnElement
 from datacube import compat
 from datacube import utils
 from datacube.index.fields import Expression, Field
-from datacube.index.postgres.tables import FLOAT8RANGE
+from datacube.index.postgres._sql import FLOAT8RANGE
 from datacube.model import Range
 from datacube.utils import get_doc_offset_safe
 

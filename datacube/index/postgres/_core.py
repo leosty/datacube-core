@@ -9,7 +9,7 @@ import logging
 from sqlalchemy import MetaData
 from sqlalchemy.schema import CreateSchema
 
-from ._sql import TYPES_INIT_SQL
+from datacube.index.postgres._sql import TYPES_INIT_SQL
 
 USER_ROLES = ('agdc_user', 'agdc_ingest', 'agdc_manage', 'agdc_admin')
 
@@ -120,10 +120,10 @@ def _pg_column_exists(conn, table, column):
     :rtype bool
     """
     return conn.execute("""
-                        select 1 from pg_attribute
-                        where attrelid = to_regclass(%s)
-                        and attname = %s
-                        and not attisdropped
+                        SELECT 1 FROM pg_attribute
+                        WHERE attrelid = to_regclass(%s)
+                        AND attname = %s
+                        AND NOT attisdropped
                         """, table, column).scalar() is not None
 
 
@@ -246,7 +246,7 @@ def grant_role(engine, role, users):
 
 
 def has_role(conn, role_name):
-    return bool(conn.execute('select rolname from pg_roles where rolname=%s', role_name).fetchall())
+    return bool(conn.execute('SELECT rolname FROM pg_roles WHERE rolname=%s', role_name).fetchall())
 
 
 def has_schema(engine, connection):

@@ -1,10 +1,12 @@
 from __future__ import absolute_import
 
-from sqlalchemy import Table, Column, String, Integer, Float, ForeignKey, UniqueConstraint, Boolean
+from sqlalchemy import Table, Column, String, Integer, Float, ForeignKey, UniqueConstraint, Boolean, MetaData
 from sqlalchemy.dialects import postgresql as postgres
 
-from datacube.index.postgres.tables import DATASET
-from .index import S3_METADATA
+from datacube.index.postgres._core import SQL_NAMING_CONVENTIONS, SCHEMA_NAME
+from datacube.index.postgres._schema import DATASET
+
+S3_METADATA = MetaData(naming_convention=SQL_NAMING_CONVENTIONS, schema=SCHEMA_NAME)
 
 #: An S3 dataset: an N-dimensional single band
 #: An example record may look like:

@@ -526,16 +526,16 @@ _EXAMPLE_DATASET_TYPE = DatasetType(
 )
 
 
-def test_multiband_support_in_datasetsource():
+def test_multiband_support_in_datasetsource(example_gdal_path):
     defn = {
         "id": '12345678123456781234567812345678',
-        "format": {"name": "hdf"},
+        "format": {"name": "GeoTiff"},
         "image": {
             "bands": {
                 'green': {
                     'type': 'reflective',
                     'cell_size': 25.0,
-                    'path': 'product/LS8_OLITIRS_NBAR_P54_GALPGS01-002_112_079_20140126_B1.tif',
+                    'path': example_gdal_path,
                     'label': 'Coastal Aerosol',
                     'number': '1',
                 },
@@ -551,6 +551,10 @@ def test_multiband_support_in_datasetsource():
     bandnum = ds.get_bandnumber(None)
 
     assert bandnum == 1
+
+    with ds.open() as foo:
+        data = foo.read()
+        assert isinstance(data, np.ndarray)
 
     #############
     # With new 'image.bands.[band].band' attribute

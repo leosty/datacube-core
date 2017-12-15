@@ -11,7 +11,7 @@ from sqlalchemy import Table, Column, Integer, String, DateTime
 from sqlalchemy.dialects import postgresql as postgres
 from sqlalchemy.sql import func
 
-from . import _core, _sql
+from datacube.index.postgres import _sql, _core
 
 _LOG = logging.getLogger(__name__)
 

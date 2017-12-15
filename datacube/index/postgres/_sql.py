@@ -78,3 +78,11 @@ class PGNAME(sqltypes.Text):
 @compiles(PGNAME)
 def visit_name(element, compiler, **kw):
     return "NAME"
+
+
+def _pg_exists(conn, name):
+    """
+    Does a postgres object exist?
+    :rtype bool
+    """
+    return conn.execute("SELECT to_regclass(%s)", name).scalar() is not None
