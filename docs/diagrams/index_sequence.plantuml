@@ -1,0 +1,19 @@
+@startuml
+title Initialise Database
+participant Test
+create PostgresDb
+activate PostgresDb
+
+Test -> PostgresDb: from_config()
+PostgresDb -> PostgresDb: create()
+activate PostgresDb
+
+PostgresDb -> PostgresDb: _create_engine()
+activate PostgresDb
+
+PostgresDb -> SQLAlchemy: create_engine()
+SQLAlchemy --> PostgresDb: returns an engine
+
+
+
+@enduml
