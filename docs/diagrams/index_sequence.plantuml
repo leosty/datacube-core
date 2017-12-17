@@ -1,10 +1,14 @@
 @startuml
 title Initialise Database
 participant Test
+participant Index
+participant PostgresDb
+
+== Create the Database Connection ==
 create PostgresDb
-activate PostgresDb
 
 Test -> PostgresDb: from_config()
+activate PostgresDb
 PostgresDb -> PostgresDb: create()
 activate PostgresDb
 
@@ -13,6 +17,31 @@ activate PostgresDb
 
 PostgresDb -> SQLAlchemy: create_engine()
 SQLAlchemy --> PostgresDb: returns an engine
+
+deactivate PostgresDb
+deactivate PostgresDb
+
+PostgresDb -> Test: database ready for use
+deactivate PostgresDb
+
+== Create an Index using the Connection ==
+
+Test -> Index: dunder_init()
+
+Test -> Index: init_db()
+activate Index
+Index -> PostgresDb: init()
+activate PostgresDb
+PostgresDb -> _core: ensure_db(self._engine)
+
+
+== Initialise the Database Using an Index ==
+
+Test -> PostgresDb: init()
+activate PostgresDb
+
+PostgresDb -> _core: ensure_db()
+
 
 
 
