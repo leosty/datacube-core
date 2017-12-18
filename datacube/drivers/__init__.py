@@ -22,6 +22,42 @@ loader object is deleted.
 TODO: update docs post DriverManager
 """
 from __future__ import absolute_import
+from pkg_resources import iter_entry_points
+
+
+class ReaderDriverCache(object):
+    def __init__(self, group):
+        drivers = [(ep.name, ep.resolve()) for ep in iter_entry_points(group=group, name=None)]
+
+        self._drivers = dict((name, init()) for name, init in drivers)
+
+        lookup = {}
+        for driver in self._drivers.values():
+            for uri_scheme in driver.protocols:
+                for fmt in driver.formats:
+                    if driver.supports(uri_scheme, fmt):
+                        key = (uri_scheme.lower(), fmt.lower())
+                        lookup[key] = driver
+
+        self._lookup = lookup
+
+    def _find_driver(self, uri_scheme, fmt):
+        key = (uri_scheme.lower(), fmt.lower())
+        return self._lookup.get(key)
+
+    def __call__(self, uri_scheme, fmt, fallback=None):
+        '''Lookup `new_datasource` constructor method from the driver. Returns
+        `fallback` method if no driver is found.
+
+        :param str uri_scheme: Protocol part of the Dataset uri
+        :param str fmt: Dataset format
+        :return: Returns function `(DataSet, band_name:str) => DataSource`
+        '''
+        driver = self._find_driver(uri_scheme, fmt)
+        return fallback if driver is None else driver.new_datasource
+
+
+_RDR_CACHE = None
 
 
 def choose_datasource(dataset):
@@ -38,10 +74,13 @@ def choose_datasource(dataset):
     NOTE: we assume that all bands can be loaded with the same implementation.
 
     """
-    # TODO: implement run-time DataSource selection. For now we just default to `RasterDatasetSource`
+    global _RDR_CACHE  # pylint: disable=global-statement
+
+    if _RDR_CACHE is None:
+        _RDR_CACHE = ReaderDriverCache('datacube.plugins.io.read')
 
     from ..storage.storage import RasterDatasetSource
-    return RasterDatasetSource
+    return _RDR_CACHE(dataset.uri_scheme, dataset.format, fallback=RasterDatasetSource)
 
 
 def new_datasource(dataset, band_name=None):
