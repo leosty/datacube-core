@@ -267,7 +267,7 @@ class S3IO(object):
             try:
                 os.makedirs(directory)
             except OSError:
-                continue
+                pass
             f = open(directory+"/"+str(s3_key), "wb")
             f.write(data)
             f.close()
