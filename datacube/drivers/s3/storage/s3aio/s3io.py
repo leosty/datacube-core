@@ -264,7 +264,10 @@ class S3IO(object):
             s3.meta.client.put_object(Bucket=s3_bucket, Key=s3_key, Body=io.BytesIO(data))
         else:
             directory = self.file_path+"/"+str(s3_bucket)
-            os.makedirs(directory, exist_ok=True)
+            try:
+                os.makedirs(directory)
+            except OSError:
+                continue
             f = open(directory+"/"+str(s3_key), "wb")
             f.write(data)
             f.close()
