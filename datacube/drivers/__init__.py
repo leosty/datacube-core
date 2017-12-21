@@ -57,7 +57,13 @@ class ReaderDriverCache(object):
         return fallback if driver is None else driver.new_datasource
 
 
-_RDR_CACHE = None
+def rdr_cache():
+    """ Singleton for ReaderDriverCache
+    """
+    # pylint: disable=protected-access
+    if not hasattr(rdr_cache, '_instance'):
+        rdr_cache._instance = ReaderDriverCache('datacube.plugins.io.read')
+    return rdr_cache._instance
 
 
 def choose_datasource(dataset):
@@ -74,13 +80,8 @@ def choose_datasource(dataset):
     NOTE: we assume that all bands can be loaded with the same implementation.
 
     """
-    global _RDR_CACHE  # pylint: disable=global-statement
-
-    if _RDR_CACHE is None:
-        _RDR_CACHE = ReaderDriverCache('datacube.plugins.io.read')
-
     from ..storage.storage import RasterDatasetSource
-    return _RDR_CACHE(dataset.uri_scheme, dataset.format, fallback=RasterDatasetSource)
+    return rdr_cache()(dataset.uri_scheme, dataset.format, fallback=RasterDatasetSource)
 
 
 def new_datasource(dataset, band_name=None):
